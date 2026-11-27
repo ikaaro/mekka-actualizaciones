@@ -107,6 +107,11 @@
   .fila .nom b{ display:block; font-weight:600; color:var(--t1); font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .fila .nom small{ display:block; color:var(--t4); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .fila .der{ text-align:right; flex-shrink:0; font-size:13px; }
+  .fila .der.con-wa{ display:flex; align-items:center; gap:8px; }
+  .wa{ width:40px; height:40px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:rgba(37,211,102,.12); border:1px solid rgba(37,211,102,.35); color:#25D366; text-decoration:none; }
+  .wa:hover{ background:rgba(37,211,102,.2); }
+  .wa svg{ width:19px; height:19px; }
   .fila .der b{ display:block; color:var(--t1); font-weight:600; }
   .est{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap; }
   .est.activa{ background:rgba(123,196,127,.14); color:var(--ok); }
@@ -154,6 +159,7 @@
     .kpis{ grid-template-columns:repeat(4, minmax(0,1fr)); }
     .kpi.ancho{ grid-column:auto; }
     .kpis.tres{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .kpis.cinco{ grid-template-columns:repeat(5, minmax(0,1fr)); }
     .dos{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .dos > .tarjeta{ margin-bottom:0; }
     #hoja{ align-items:center; }
@@ -452,6 +458,19 @@
 
   function ingresos(desde, hasta){ return D.cobros.filter(c => c.fecha >= desde && c.fecha <= hasta).reduce((t, c) => t + c.monto, 0); }
 
+  // WhatsApp con recordatorio de renovación ya escrito (el dueño solo lo revisa y lo manda)
+  function botonWa(s){
+    const tel = telLimpio(s.telefono);
+    if(!tel) return '';
+    const nombre = s.nombre.split(' ')[0];
+    const plan = s.actual && s.actual.nombre ? ' ' + s.actual.nombre : '';
+    const dias = Math.round((new Date(s.vence + 'T12:00:00') - new Date(D.hoy + 'T12:00:00')) / 864e5);
+    const cuandoV = dias <= 0 ? 'hoy' : dias === 1 ? 'mañana' : 'el ' + fCorta(s.vence);
+    const msg = `Hola ${nombre}, te saluda ${D.gym}. Te recordamos que tu membresía${plan} vence ${cuandoV}. ¿Te la renovamos para que sigas entrenando sin pausa?`;
+    const url = 'https://wa.me/' + (tel.length === 10 ? '52' + tel : tel) + '?text=' + encodeURIComponent(msg);
+    return `<a class="wa" href="${esc(url)}" target="_blank" rel="noopener" title="Mandar recordatorio por WhatsApp" aria-label="WhatsApp a ${esc(s.nombre)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5 5 16.3A8.5 8.5 0 1 1 8 19.2Z"/><path d="M9 8.6c0 3.3 3 6.4 6.4 6.4l1.1-1.4-1.8-.9-.9.8c-1-.4-2.4-1.8-2.8-2.8l.8-.9-.9-1.8Z"/></svg></a>`;
+  }
+
   function pintarResumen(){
     const hoy = D.hoy, mes = hoy.slice(0, 7);
     const activos = D.socios.filter(s => s.estado === 'activa' || s.estado === 'pronto');
@@ -459,10 +478,12 @@
     const vencidos = D.socios.filter(s => s.recienVencida).sort((a, b) => b.vence.localeCompare(a.vence));
     const ingMes = ingresos(mes + '-01', mes + '-31');
     const ingHoy = ingresos(hoy, hoy);
+    const sinM = D.socios.filter(s => s.estado === 'sin').length;
     const v = $('vista');
     v.innerHTML = `
-      <div class="kpis">
-        <div class="kpi glass"><span class="etq">Activos</span><b>${activos.length}</b><small>de ${D.socios.length} socios</small></div>
+      <div class="kpis cinco">
+        <div class="kpi glass ancho"><span class="etq">Socios</span><b>${D.socios.length}</b><small>${activos.length} activos · ${D.socios.filter(s => s.estado === 'vencida').length} vencidos${sinM ? ' · ' + sinM + ' sin membresía' : ''}</small></div>
+        <div class="kpi glass"><span class="etq">Activos</span><b>${activos.length}</b><small>${D.socios.length ? Math.round(activos.length * 100 / D.socios.length) : 0}% del total</small></div>
         <div class="kpi glass"><span class="etq">Hoy</span><b>${pesos(ingHoy)}</b><small>${D.accesosHoy} entradas</small></div>
         <div class="kpi glass"><span class="etq">${esc(MESES[+mes.slice(5) - 1])}</span><b>${pesos(ingMes)}</b><small>ingresos del mes</small></div>
         <div class="kpi glass"><span class="etq">Por vencer</span><b>${pronto.length}</b><small>en los próximos 7 días</small></div>
@@ -474,7 +495,8 @@
       ${D.fecha && (Date.now() - new Date(D.fecha.replace(' ', 'T'))) > 864e5 ? `<div class="tarjeta glass"><p class="sub" style="margin:0">Estos datos son de ${esc(cuando(D.fecha))}. Las copias se suben solo mientras Mekka está abierto en el gimnasio.</p></div>` : ''}`;
     const lista = (arr, id, der) => { const c = $(id); c.innerHTML = arr.length ? arr.slice(0, 8).map(s => filaSocio(s, der && der(s))).join('') + (arr.length > 8 ? `<div class="fila" data-ver="${id}"><div class="nom"><small>Ver los ${arr.length}</small></div></div>` : '') : '<div class="vacio">Nadie por ahora.</div>'; enlazarFilas(c);
       const mas = c.querySelector('[data-ver]'); if(mas) mas.onclick = () => { filtro = id === 'lPronto' ? 'pronto' : 'vencida'; ir('socios'); }; };
-    lista(pronto, 'lPronto', s => `<span class="est pronto">${esc(fCorta(s.vence))}</span>`);
+    lista(pronto, 'lPronto', s => `<span class="est pronto">${esc(fCorta(s.vence))}</span>${botonWa(s)}`);
+    $('lPronto').querySelectorAll('.wa').forEach(a => { a.onclick = e => e.stopPropagation(); a.closest('.der').classList.add('con-wa'); });
     lista(vencidos, 'lVencidos', s => `<span class="est vencida">${esc(fCorta(s.vence))}</span>`);
   }
 
