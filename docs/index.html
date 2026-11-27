@@ -187,14 +187,14 @@
     <div class="ini-acc">
       <button class="btn" id="btnGoogle" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.78A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6.5 19h11Z"/></svg>
-        Entrar con Google Drive</button>
+        <span id="btnGoogleTxt" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Entrar con Google Drive</span></button>
       <button class="btn sec" id="btnArchivo" type="button">Abrir un archivo .mekka</button>
       <input type="file" id="archivo" accept=".mekka" class="oculto">
     </div>
     <div class="msg-err" id="iniErr" role="alert"></div>
     <div class="ini-nota glass">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      <div>Tus datos se abren solo en este navegador. No pasan por nuestros servidores y no se guardan aquí: al cerrar la página, se van.</div>
+      <div>Tus datos se abren solo en este navegador y no pasan por nuestros servidores. Este teléfono recuerda tu sesión de Google hasta que toques Salir.</div>
     </div>
   </div>
   <div class="ini-pie">Mekka Fitness Control · <a href="privacidad.html">Privacidad</a></div>
@@ -275,25 +275,58 @@
 
   // ------------------------------------------------------------------ Google Drive
   if(!CLIENT_ID) $('btnGoogle').classList.add('oculto');
+  // Sesión recordada en este teléfono: Google da permisos por 1 hora. Mientras siga vigente se reusa sin preguntar;
+  // cuando vence, basta un toque en "Continuar" (Google ya no pide elegir cuenta ni dar permiso otra vez).
+  const SES = 'mekka_sesion';
+  const leerSes = () => { try{ return JSON.parse(localStorage.getItem(SES) || 'null') || {}; }catch(e){ return {}; } };
+  const guardarSes = o => { try{ localStorage.setItem(SES, JSON.stringify(Object.assign(leerSes(), o))); }catch(e){} };
+  const borrarSes = () => { try{ localStorage.removeItem(SES); }catch(e){} };
+  const tokenVigente = () => { const x = leerSes(); return x.token && x.vence > Date.now() + 60e3 ? x.token : ''; };
+  function pintarBotonGoogle(){
+    const x = leerSes();
+    $('btnGoogleTxt').textContent = x.recordar ? (x.correo ? 'Continuar como ' + x.correo : 'Continuar con Google Drive') : 'Entrar con Google Drive';
+  }
+  function pedirToken(){
+    const x = leerSes();
+    const op = x.recordar ? { prompt: '' } : {};
+    if(x.recordar && x.correo) op.login_hint = x.correo;
+    tokenCliente.requestAccessToken(op);
+  }
+  async function recordarCorreo(){
+    try{ const r = await drive('/about?fields=user(emailAddress)'); if(r.user && r.user.emailAddress) guardarSes({ correo: r.user.emailAddress }); }catch(e){}
+  }
+  pintarBotonGoogle();
+  (function arrancar(){
+    const t = tokenVigente();
+    if(t){ token = t; buscarCopias(); }
+  })();
+
   $('btnGoogle').onclick = () => {
     $('iniErr').textContent = '';
+    const t = tokenVigente();
+    if(t){ token = t; buscarCopias(); return; }
     if(!(window.google && google.accounts && google.accounts.oauth2)){ $('iniErr').textContent = 'No se pudo cargar el inicio de sesión de Google. Revisa tu internet y recarga la página.'; return; }
     if(!tokenCliente){
       tokenCliente = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID, scope: ALCANCE,
         callback: r => {
-          if(r && r.access_token){ token = r.access_token; buscarCopias(); }
+          if(r && r.access_token){
+            token = r.access_token;
+            guardarSes({ token, vence: Date.now() + (+r.expires_in || 3600) * 1000, recordar: 1 });
+            pintarBotonGoogle(); buscarCopias();
+            if(!leerSes().correo) recordarCorreo().then(pintarBotonGoogle);
+          }
           else $('iniErr').textContent = 'No se completó el inicio de sesión.';
         },
         error_callback: () => { $('iniErr').textContent = 'Se cerró la ventana de Google antes de terminar.'; },
       });
     }
-    tokenCliente.requestAccessToken();
+    pedirToken();
   };
 
   async function drive(ruta, comoBinario, progreso){
     const r = await fetch(DRIVE + ruta, { headers: { Authorization: 'Bearer ' + token } });
-    if(r.status === 401){ token = ''; throw new Error('Tu sesión de Google terminó. Vuelve a entrar.'); }
+    if(r.status === 401){ token = ''; guardarSes({ token: '', vence: 0 }); pintarBotonGoogle(); throw new Error('Pasó la hora que da Google. Toca Continuar para seguir viendo tu gimnasio.'); }
     if(!r.ok) throw new Error('Google Drive respondió con un error (' + r.status + ').');
     if(!comoBinario) return r.json();
     const total = +r.headers.get('Content-Length') || +comoBinario || 0;
@@ -345,10 +378,16 @@
     if(!archivosGym.length){ $('archivo').click(); return; }
     elegirLista('Copias anteriores', 'Historial', archivosGym.map(a => ({ t: cuando(fechaDe(a)), s: ((a.appProperties && a.appProperties.tipo) === 'vista' ? 'Vista rápida' : 'Respaldo completo') + (a.size ? ' · ' + tam(+a.size) : '') + (a === archivoActual ? ' · la que estás viendo' : ''), fn: () => abrirArchivo(a) })), () => mostrar('app'));
   };
-  $('btnRecargar').onclick = () => { if(token) buscarCopias(); else $('archivo').click(); };
+  $('btnRecargar').onclick = () => {
+    if(!archivosGym.length && !leerSes().recordar){ $('archivo').click(); return; }
+    const t = tokenVigente();
+    if(t){ token = t; buscarCopias(); return; }
+    $('btnGoogle').click();      // venció la hora de Google: se renueva con este mismo toque
+  };
   $('btnSalir').onclick = () => {
     if(token && window.google && google.accounts && google.accounts.oauth2) try{ google.accounts.oauth2.revoke(token, () => {}); }catch(e){}
-    token = ''; D = null; archivosGym = []; archivoActual = null; $('vista').innerHTML = ''; $('iniErr').textContent = ''; mostrar('inicio');
+    token = ''; borrarSes(); pintarBotonGoogle();
+    D = null; archivosGym = []; archivoActual = null; $('vista').innerHTML = ''; $('iniErr').textContent = ''; mostrar('inicio');
   };
 
   // ------------------------------------------------------------------ datos
