@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070707">
+<meta name="robots" content="noindex">
+<title>Mekka · Tu gimnasio</title>
+<meta name="description" content="Consulta tus socios e ingresos desde tu respaldo de Mekka Fitness Control. Tus datos se abren solo en tu navegador.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Michroma&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="mekka-lector.js"></script>
+<style>
+  :root{
+    --bg:#070707; --sup:#0A0A0A; --t1:#FFFFFF; --t2:#F2F2F2; --t3:#A8A8A8; --t4:#9A9A9A; --t5:#6E6E6E;
+    --borde:rgba(255,255,255,.14); --borde2:rgba(255,255,255,.08);
+    --ok:#7BC47F; --warn:#D9C6A3; --err:#E5675D;
+    --mono:'Michroma', 'Segoe UI', sans-serif; --sans:'Manrope', 'Segoe UI', system-ui, sans-serif;
+    --seguro-arriba:env(safe-area-inset-top, 0px); --seguro-abajo:env(safe-area-inset-bottom, 0px);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; background:var(--bg); color:var(--t2); font-family:var(--sans); font-size:15px; line-height:1.5; }
+  body{ min-height:100dvh; overflow-x:hidden; }
+  body::before{ content:""; position:fixed; inset:-20%; pointer-events:none; z-index:0;
+    background:radial-gradient(40% 35% at 15% 10%, rgba(255,255,255,.14), transparent 70%),
+               radial-gradient(35% 30% at 90% 80%, rgba(255,255,255,.10), transparent 70%); }
+  button{ font-family:inherit; }
+  .glass{ background:linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.03));
+    -webkit-backdrop-filter:blur(26px) saturate(170%); backdrop-filter:blur(26px) saturate(170%);
+    border:1px solid var(--borde);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.05), 0 24px 70px rgba(0,0,0,.55); }
+  .etq{ font-family:var(--mono); font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--t4); }
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:52px; padding:0 26px; border-radius:999px;
+    border:0; background:#F5F5F5; color:#0A0A0A; font-weight:600; font-size:15px; cursor:pointer; transition:transform .15s, opacity .15s; text-decoration:none; }
+  .btn:active{ transform:scale(.98); }
+  .btn.sec{ background:transparent; color:var(--t2); border:1px solid rgba(255,255,255,.22); }
+  .btn.mini{ min-height:40px; padding:0 16px; font-size:13.5px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .btn svg{ width:18px; height:18px; }
+  .oculto{ display:none !important; }
+  a{ color:var(--t1); }
+
+  /* ---------- Bienvenida ---------- */
+  #inicio{ position:relative; z-index:1; min-height:100dvh; display:flex; flex-direction:column; padding:calc(20px + var(--seguro-arriba)) 24px calc(24px + var(--seguro-abajo)); max-width:560px; margin:0 auto; }
+  #inicio header{ display:flex; align-items:center; justify-content:space-between; }
+  #inicio header img{ height:20px; }
+  .ini-cuerpo{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:40px 0; }
+  .ini-cuerpo h1{ font-size:clamp(34px, 9vw, 46px); line-height:1.05; letter-spacing:-.045em; font-weight:700; margin:16px 0 14px; color:var(--t1); }
+  .ini-cuerpo h1 span{ color:#9C9C9C; }
+  .ini-cuerpo p{ color:var(--t3); margin:0 0 30px; font-size:15.5px; max-width:420px; }
+  .ini-acc{ display:flex; flex-direction:column; gap:12px; }
+  .ini-nota{ display:flex; gap:12px; align-items:flex-start; margin-top:30px; padding:16px; border-radius:20px; font-size:13px; color:var(--t3); }
+  .ini-nota svg{ width:20px; height:20px; flex-shrink:0; color:var(--t1); margin-top:1px; }
+  .ini-pie{ font-size:12px; color:var(--t5); text-align:center; }
+  .ini-pie a{ color:var(--t3); }
+  .msg-err{ color:var(--err); font-size:13.5px; margin-top:14px; min-height:20px; }
+
+  /* ---------- Cargando ---------- */
+  #cargando{ position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(7,7,7,.75); }
+  #cargando .caja{ width:min(320px, 86vw); padding:26px; border-radius:28px; text-align:center; }
+  #cargando .barra{ height:4px; border-radius:999px; background:rgba(255,255,255,.12); overflow:hidden; margin:18px 0 10px; }
+  #cargando .barra i{ display:block; height:100%; width:30%; background:#F5F5F5; border-radius:999px; transition:width .25s; }
+  #cargando .txt{ font-size:13px; color:var(--t3); }
+
+  /* ---------- Elegir gimnasio / copia ---------- */
+  #elegir{ position:relative; z-index:1; max-width:560px; margin:0 auto; padding:calc(24px + var(--seguro-arriba)) 20px 40px; }
+  .opc{ width:100%; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-radius:20px; margin-bottom:10px; color:var(--t2); cursor:pointer; border:1px solid var(--borde); background:rgba(255,255,255,.04); font-size:15px; }
+  .opc small{ display:block; color:var(--t4); font-size:12.5px; }
+
+  /* ---------- App ---------- */
+  #app{ position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:calc(14px + var(--seguro-arriba)) 18px calc(96px + var(--seguro-abajo)); }
+  .cab{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 2px 18px; }
+  .cab img{ height:18px; display:block; }
+  .cab-der{ display:flex; gap:8px; }
+  .ico-btn{ width:44px; height:44px; border-radius:14px; border:1px solid var(--borde); background:rgba(255,255,255,.05); color:var(--t1); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .ico-btn svg{ width:20px; height:20px; }
+  .gym{ margin:0 2px 18px; }
+  .gym h1{ font-size:clamp(26px, 6.5vw, 36px); letter-spacing:-.04em; font-weight:700; margin:6px 0 4px; line-height:1.1; color:var(--t1); }
+  .gym .datos{ font-size:13px; color:var(--t3); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .punto{ width:7px; height:7px; border-radius:50%; background:var(--ok); display:inline-block; }
+  .punto.viejo{ background:var(--warn); }
+
+  .tabs{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(14px + var(--seguro-abajo)); z-index:20; display:flex; gap:4px; padding:6px; border-radius:999px; }
+  .tab{ min-height:46px; padding:0 18px; border-radius:999px; border:0; background:transparent; color:var(--t3); font-weight:600; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:7px; }
+  .tab svg{ width:18px; height:18px; }
+  .tab.activa{ background:#F5F5F5; color:#0A0A0A; }
+
+  .kpis{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+  .kpi{ padding:16px; border-radius:22px; min-width:0; }
+  .kpi b{ display:block; font-size:clamp(24px, 6.5vw, 30px); letter-spacing:-.03em; color:var(--t1); font-weight:700; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kpi small{ display:block; color:var(--t4); font-size:12px; margin-top:2px; }
+  .kpi.ancho{ grid-column:1/-1; }
+  .tarjeta{ border-radius:26px; padding:18px; margin-bottom:14px; }
+  .tarjeta h2{ font-size:17px; font-weight:600; margin:0 0 4px; color:var(--t1); letter-spacing:-.01em; }
+  .tarjeta .sub{ font-size:12.5px; color:var(--t4); margin:0 0 12px; }
+  .vacio{ color:var(--t5); font-size:13.5px; padding:10px 0; }
+
+  .fila{ display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--borde2); cursor:pointer; }
+  .fila:first-child{ border-top:0; }
+  .ini{ width:40px; height:40px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); color:var(--t1); font-weight:600; font-size:14px; flex-shrink:0; }
+  .fila .nom{ flex:1; min-width:0; }
+  .fila .nom b{ display:block; font-weight:600; color:var(--t1); font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fila .nom small{ display:block; color:var(--t4); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fila .der{ text-align:right; flex-shrink:0; font-size:13px; }
+  .fila .der b{ display:block; color:var(--t1); font-weight:600; }
+  .est{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .est.activa{ background:rgba(123,196,127,.14); color:var(--ok); }
+  .est.pronto{ background:rgba(217,198,163,.14); color:var(--warn); }
+  .est.vencida{ background:rgba(229,103,93,.12); color:var(--err); }
+  .est.sin, .est.proxima{ background:rgba(255,255,255,.08); color:var(--t3); }
+
+  .buscar{ display:flex; align-items:center; gap:10px; padding:0 16px; min-height:50px; border-radius:999px; margin-bottom:12px; }
+  .buscar svg{ width:18px; height:18px; color:var(--t4); flex-shrink:0; }
+  .buscar input{ flex:1; background:none; border:0; outline:0; color:var(--t1); font-size:16px; font-family:inherit; min-width:0; }
+  .chips{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar{ display:none; }
+  .chip{ flex-shrink:0; min-height:38px; padding:0 15px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:transparent; color:var(--t2); font-size:13px; font-weight:500; cursor:pointer; }
+  .chip.activa{ background:#F5F5F5; color:#0A0A0A; border-color:#F5F5F5; }
+  .chip small{ opacity:.6; margin-left:4px; }
+
+  .barras{ display:flex; align-items:flex-end; gap:3px; height:150px; padding-top:10px; }
+  .barras div{ flex:1; background:rgba(255,255,255,.85); border-radius:4px 4px 1px 1px; min-height:2px; position:relative; }
+  .barras div.cero{ background:rgba(255,255,255,.12); }
+  .barras div.hoy{ background:#fff; box-shadow:0 0 0 1px rgba(255,255,255,.5); }
+  .ejes{ display:flex; justify-content:space-between; font-size:11px; color:var(--t5); margin-top:6px; }
+  .reparto{ display:flex; flex-direction:column; gap:10px; }
+  .reparto .r{ display:flex; justify-content:space-between; font-size:14px; }
+  .reparto .r span{ color:var(--t3); }
+  .reparto .r b{ color:var(--t1); font-weight:600; }
+  .linea{ height:6px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden; display:flex; }
+  .linea i{ display:block; height:100%; background:#F5F5F5; }
+  .linea i + i{ background:#8E8E8E; }
+  .linea i + i + i{ background:#4A4A4A; }
+
+  /* ---------- Hoja de socio ---------- */
+  #hoja{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.55); }
+  #hoja .panel{ width:min(620px, 100%); max-height:88dvh; overflow:auto; border-radius:30px 30px 0 0; padding:10px 20px calc(24px + var(--seguro-abajo)); background:#0F0F0F; border:1px solid var(--borde); border-bottom:0; }
+  #hoja .asa{ width:42px; height:5px; border-radius:999px; background:rgba(255,255,255,.25); margin:4px auto 14px; }
+  .h-cab{ display:flex; gap:14px; align-items:center; margin-bottom:14px; }
+  .h-cab .ini{ width:52px; height:52px; border-radius:16px; font-size:18px; }
+  .h-cab h3{ margin:0; font-size:20px; color:var(--t1); letter-spacing:-.02em; line-height:1.2; }
+  .h-acc{ display:flex; gap:8px; margin:0 0 16px; flex-wrap:wrap; }
+  .h-sec{ margin-top:16px; }
+  .h-sec .etq{ margin-bottom:6px; display:block; }
+  .h-dato{ display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--borde2); font-size:13.5px; }
+  .h-dato span{ color:var(--t3); } .h-dato b{ color:var(--t1); font-weight:600; text-align:right; }
+
+  @media (min-width:860px){
+    .kpis{ grid-template-columns:repeat(4, minmax(0,1fr)); }
+    .kpi.ancho{ grid-column:auto; }
+    .kpis.tres{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .dos{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .dos > .tarjeta{ margin-bottom:0; }
+    #hoja{ align-items:center; }
+    #hoja .panel{ border-radius:30px; border-bottom:1px solid var(--borde); }
+  }
+  @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ===================== Bienvenida ===================== -->
+<section id="inicio">
+  <header><img src="logo.png" alt="Mekka"><span class="etq">Mekka App</span></header>
+  <div class="ini-cuerpo">
+    <span class="etq">Tu gimnasio en el celular</span>
+    <h1>Tus socios y tus ingresos. <span>Desde donde estés.</span></h1>
+    <p>Entra con la cuenta de Google que conectaste en Mekka y abrimos la copia más reciente de tu gimnasio.</p>
+    <div class="ini-acc">
+      <button class="btn" id="btnGoogle" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.78A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6.5 19h11Z"/></svg>
+        Entrar con Google Drive</button>
+      <button class="btn sec" id="btnArchivo" type="button">Abrir un archivo .mekka</button>
+      <input type="file" id="archivo" accept=".mekka" class="oculto">
+    </div>
+    <div class="msg-err" id="iniErr" role="alert"></div>
+    <div class="ini-nota glass">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <div>Tus datos se abren solo en este navegador. No pasan por nuestros servidores y no se guardan aquí: al cerrar la página, se van.</div>
+    </div>
+  </div>
+  <div class="ini-pie">Mekka Fitness Control · <a href="privacidad.html">Privacidad</a></div>
+</section>
+
+<!-- ===================== Elegir gimnasio / copia ===================== -->
+<section id="elegir" class="oculto">
+  <div class="cab" style="padding-bottom:22px"><img src="logo.png" alt="Mekka"><button class="ico-btn" id="elegirVolver" aria-label="Volver" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button></div>
+  <span class="etq" id="elegirEtq">Elige</span>
+  <h2 style="font-size:26px;letter-spacing:-.03em;margin:6px 0 18px;color:#fff" id="elegirTitulo"></h2>
+  <div id="elegirLista"></div>
+</section>
+
+<!-- ===================== App ===================== -->
+<main id="app" class="oculto">
+  <div class="cab">
+    <img src="logo.png" alt="Mekka">
+    <div class="cab-der">
+      <button class="ico-btn" id="btnCopias" aria-label="Copias anteriores" title="Copias anteriores" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+      <button class="ico-btn" id="btnRecargar" aria-label="Buscar copia más reciente" title="Buscar copia más reciente" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="ico-btn" id="btnSalir" aria-label="Salir" title="Salir" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
+    </div>
+  </div>
+  <div class="gym"><span class="etq">Tu gimnasio</span><h1 id="gymNombre"></h1><div class="datos" id="gymDatos"></div></div>
+  <div id="vista"></div>
+  <nav class="tabs glass" aria-label="Secciones">
+    <button class="tab activa" data-v="resumen" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Resumen</button>
+    <button class="tab" data-v="socios" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8"/><path d="M22 21a7 7 0 0 0-4-6.3"/></svg>Socios</button>
+    <button class="tab" data-v="ingresos" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Ingresos</button>
+  </nav>
+</main>
+
+<div id="cargando" class="oculto"><div class="caja glass"><span class="etq">Abriendo</span><div class="barra"><i id="cargBarra"></i></div><div class="txt" id="cargTxt">Un momento…</div></div></div>
+<div id="hoja" class="oculto"><div class="panel" role="dialog" aria-modal="true"><div class="asa"></div><div id="hojaCuerpo"></div></div></div>
+
+<script>
+(function(){
+  'use strict';
+  // >>> ID del cliente "Aplicación web" del mismo proyecto de Google Cloud que usa Mekka (ver LEEME_google_drive.md)
+  const CLIENT_ID = window.__MEKKA_CLIENT_ID || '';
+  const DRIVE = window.__MEKKA_DRIVE || 'https://www.googleapis.com/drive/v3';
+  const ALCANCE = 'https://www.googleapis.com/auth/drive.file';
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const pesos = n => '$' + Math.round(n || 0).toLocaleString('es-MX');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const sumarDias = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
+  const fCorta = s => { if(!s) return ''; const [a, m, d] = s.slice(0, 10).split('-').map(Number); return `${d} ${MES[m - 1]}${a !== new Date().getFullYear() ? ' ' + a : ''}`; };
+  const iniciales = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
+  const telLimpio = t => String(t || '').replace(/\D/g, '');
+
+  let token = '', tokenCliente = null, archivosGym = [], archivoActual = null;
+  let D = null;          // datos listos para mostrar
+  let vista = 'resumen', filtro = 'todos', textoBuscar = '', mesSel = '';
+
+  // ------------------------------------------------------------------ pantallas
+  function mostrar(id){ ['inicio', 'elegir', 'app'].forEach(x => $(x).classList.toggle('oculto', x !== id)); window.scrollTo(0, 0); }
+  function cargando(on, txt, pct){
+    $('cargando').classList.toggle('oculto', !on);
+    if(txt) $('cargTxt').textContent = txt;
+    $('cargBarra').style.width = (pct == null ? 30 : Math.max(4, pct)) + '%';
+  }
+  function error(msg){ cargando(false); mostrar('inicio'); $('iniErr').textContent = msg; }
+
+  // ------------------------------------------------------------------ archivo a mano
+  $('btnArchivo').onclick = () => $('archivo').click();
+  $('archivo').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if(!f) return;
+    archivoActual = null; archivosGym = [];
+    cargando(true, 'Leyendo ' + f.name, 50);
+    try{ await abrirDatos(await f.arrayBuffer()); }catch(err){ error(err.message || 'No se pudo abrir el archivo.'); }
+  };
+
+  // ------------------------------------------------------------------ Google Drive
+  if(!CLIENT_ID) $('btnGoogle').classList.add('oculto');
+  $('btnGoogle').onclick = () => {
+    $('iniErr').textContent = '';
+    if(!(window.google && google.accounts && google.accounts.oauth2)){ $('iniErr').textContent = 'No se pudo cargar el inicio de sesión de Google. Revisa tu internet y recarga la página.'; return; }
+    if(!tokenCliente){
+      tokenCliente = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID, scope: ALCANCE,
+        callback: r => {
+          if(r && r.access_token){ token = r.access_token; buscarCopias(); }
+          else $('iniErr').textContent = 'No se completó el inicio de sesión.';
+        },
+        error_callback: () => { $('iniErr').textContent = 'Se cerró la ventana de Google antes de terminar.'; },
+      });
+    }
+    tokenCliente.requestAccessToken();
+  };
+
+  async function drive(ruta, comoBinario, progreso){
+    const r = await fetch(DRIVE + ruta, { headers: { Authorization: 'Bearer ' + token } });
+    if(r.status === 401){ token = ''; throw new Error('Tu sesión de Google terminó. Vuelve a entrar.'); }
+    if(!r.ok) throw new Error('Google Drive respondió con un error (' + r.status + ').');
+    if(!comoBinario) return r.json();
+    const total = +r.headers.get('Content-Length') || +comoBinario || 0;
+    if(!r.body || !total || !progreso) return r.arrayBuffer();
+    const lector = r.body.getReader(); const partes = []; let n = 0;
+    for(;;){ const { done, value } = await lector.read(); if(done) break; partes.push(value); n += value.length; progreso(n / total); }
+    const out = new Uint8Array(n); let p = 0; for(const x of partes){ out.set(x, p); p += x.length; }
+    return out.buffer;
+  }
+
+  async function buscarCopias(){
+    cargando(true, 'Buscando tus copias en Google Drive', 15);
+    try{
+      const q = "appProperties has { key='mekka' and value='1' } and trashed=false";
+      const r = await drive('/files?' + new URLSearchParams({ q, orderBy: 'createdTime desc', pageSize: '200', spaces: 'drive',
+        fields: 'files(id,name,createdTime,size,appProperties)' }));
+      const archivos = r.files || [];
+      if(!archivos.length){ error('No encontramos copias de Mekka en ese Google Drive. Revisa que sea la misma cuenta que conectaste en Mekka (Configuración › Datos › Respaldo en Google Drive) y que ya se haya subido la primera copia.'); return; }
+      const grupos = {};
+      archivos.forEach(a => { const g = (a.appProperties && a.appProperties.gym) || 'Mi gimnasio'; (grupos[g] = grupos[g] || []).push(a); });
+      const nombres = Object.keys(grupos);
+      if(nombres.length === 1){ archivosGym = grupos[nombres[0]]; return abrirArchivo(archivosGym[0]); }
+      cargando(false);
+      elegirLista('Tienes varios gimnasios', 'Gimnasios', nombres.map(n => ({ t: n, s: 'Última copia: ' + cuando(fechaDe(grupos[n][0])), fn: () => { archivosGym = grupos[n]; abrirArchivo(archivosGym[0]); } })), () => mostrar('inicio'));
+    }catch(err){ error(err.message); }
+  }
+
+  function fechaDe(a){ const f = a.appProperties && a.appProperties.fecha; return f ? f.replace('T', ' ') : (a.createdTime || '').replace('T', ' ').slice(0, 19); }
+
+  async function abrirArchivo(a){
+    archivoActual = a;
+    cargando(true, 'Descargando la copia de ' + cuando(fechaDe(a)), 5);
+    try{
+      const buf = await drive('/files/' + encodeURIComponent(a.id) + '?alt=media', a.size || true, p => cargando(true, 'Descargando…', 5 + p * 80));
+      await abrirDatos(buf);
+    }catch(err){ error(err.message || 'No se pudo abrir la copia.'); }
+  }
+
+  function elegirLista(titulo, etq, opciones, volver){
+    $('elegirTitulo').textContent = titulo; $('elegirEtq').textContent = etq;
+    $('elegirLista').innerHTML = opciones.map((o, i) => `<button class="opc" type="button" data-i="${i}"><span>${esc(o.t)}<small>${esc(o.s || '')}</small></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l6-6-6-6"/></svg></button>`).join('');
+    $('elegirLista').querySelectorAll('.opc').forEach(b => b.onclick = () => opciones[+b.dataset.i].fn());
+    $('elegirVolver').onclick = volver;
+    mostrar('elegir');
+  }
+
+  $('btnCopias').onclick = () => {
+    if(!archivosGym.length){ $('archivo').click(); return; }
+    elegirLista('Copias anteriores', 'Historial', archivosGym.map(a => ({ t: cuando(fechaDe(a)), s: (a.size ? (a.size / 1048576).toFixed(1) + ' MB' : '') + (a === archivoActual ? ' · la que estás viendo' : ''), fn: () => abrirArchivo(a) })), () => mostrar('app'));
+  };
+  $('btnRecargar').onclick = () => { if(token) buscarCopias(); else $('archivo').click(); };
+  $('btnSalir').onclick = () => {
+    if(token && window.google && google.accounts && google.accounts.oauth2) try{ google.accounts.oauth2.revoke(token, () => {}); }catch(e){}
+    token = ''; D = null; archivosGym = []; archivoActual = null; $('vista').innerHTML = ''; $('iniErr').textContent = ''; mostrar('inicio');
+  };
+
+  // ------------------------------------------------------------------ datos
+  async function abrirDatos(buf){
+    cargando(true, 'Preparando tus datos', 90);
+    const r = await MekkaLector.abrir(buf);
+    D = preparar(r);
+    cargando(false);
+    pintarCabecera(); ir('resumen'); mostrar('app');
+  }
+
+  function preparar(r){
+    const db = r.db('socios.db');
+    const cfg = {}; db.filas('config').forEach(f => { cfg[f.clave] = f.valor; });
+    const hoy = iso(new Date());
+    const socios = new Map();
+    db.filas('socios').forEach(s => {
+      const nombre = [s.nombre, s.apellido_paterno, s.apellido_materno].filter(Boolean).join(' ').trim() || 'Sin nombre';
+      socios.set(s.id, { id: s.id, nombre, telefono: s.telefono || '', correo: s.correo || '', membs: [], accesos: [] });
+    });
+    const membs = db.filas('socio_membresias');
+    membs.forEach(m => { const s = socios.get(m.socio_id); if(s) s.membs.push(m); });
+    const accesos = db.tiene('accesos') ? db.filas('accesos') : [];
+    accesos.forEach(a => { const s = socios.get(a.socio_id); if(s && a.concedido) s.accesos.push(a.fecha_hora); });
+    const en7 = sumarDias(hoy, 7), hace30 = sumarDias(hoy, -30);
+    for(const s of socios.values()){
+      s.membs.sort((a, b) => (a.fecha_vencimiento || '').localeCompare(b.fecha_vencimiento || ''));
+      s.accesos.sort().reverse();
+      const act = s.membs.filter(m => m.fecha_inicio <= hoy && hoy < m.fecha_vencimiento).pop();
+      const fut = s.membs.find(m => m.fecha_inicio > hoy);
+      const ult = s.membs[s.membs.length - 1];
+      s.actual = act || fut || ult || null;
+      if(act){ s.estado = act.fecha_vencimiento <= en7 ? 'pronto' : 'activa'; s.vence = act.fecha_vencimiento; }
+      else if(fut){ s.estado = 'proxima'; s.vence = fut.fecha_vencimiento; }
+      else if(ult){ s.estado = 'vencida'; s.vence = ult.fecha_vencimiento; }
+      else { s.estado = 'sin'; s.vence = ''; }
+      s.recienVencida = s.estado === 'vencida' && s.vence > hace30;
+    }
+    const cobros = [];
+    membs.forEach(m => { if(m.fecha_pago) cobros.push({ fecha: m.fecha_pago, hora: (m.creado || '').slice(11, 16), tipo: 'memb', concepto: m.nombre || 'Membresía',
+      socio: (socios.get(m.socio_id) || {}).nombre || '', monto: +m.precio || 0, metodo: metodo(m.metodo_pago, m.usuario) }); });
+    if(db.tiene('ventas_producto')){
+      const items = {};
+      (db.tiene('venta_producto_items') ? db.filas('venta_producto_items') : []).forEach(i => { (items[i.venta_id] = items[i.venta_id] || []).push(i); });
+      db.filas('ventas_producto').forEach(v => {
+        const its = items[v.id] || [];
+        cobros.push({ fecha: (v.fecha || '').slice(0, 10), hora: (v.fecha || '').slice(11, 16), tipo: 'prod',
+          concepto: its.length ? its.map(i => (i.cantidad > 1 ? i.cantidad + ' × ' : '') + i.nombre).join(', ') : 'Venta de productos',
+          socio: '', monto: +v.total || 0, metodo: metodo(v.metodo_pago, v.usuario) });
+      });
+    }
+    cobros.sort((a, b) => (b.fecha + b.hora).localeCompare(a.fecha + a.hora));
+    const accesosHoy = accesos.filter(a => a.concedido && (a.fecha_hora || '').startsWith(hoy));
+    return { cfg, gym: (cfg.nombre || '').trim() || 'Mi gimnasio', fecha: r.manifest.fecha || '', sinFotos: !!r.manifest.sin_fotos,
+      hoy, socios: [...socios.values()], cobros, accesosHoy: accesosHoy.length,
+      unicosHoy: new Set(accesosHoy.map(a => a.socio_id)).size };
+  }
+  function metodo(m, usuario){
+    if(m === 'digital' && usuario === 'Cobro automático') return 'mp';
+    return m === 'digital' ? 'digital' : 'efectivo';
+  }
+
+  function cuando(f){
+    if(!f) return '';
+    const d = new Date(f.replace(' ', 'T'));
+    if(isNaN(d)) return f;
+    const hoy = iso(new Date()), ayer = sumarDias(hoy, -1), dia = iso(d);
+    const hm = d.toTimeString().slice(0, 5);
+    return (dia === hoy ? 'Hoy' : dia === ayer ? 'Ayer' : `${d.getDate()} ${MES[d.getMonth()]}`) + ' ' + hm;
+  }
+  function hace(f){
+    const d = new Date(f.replace(' ', 'T')); if(isNaN(d)) return '';
+    const min = Math.max(0, Math.round((Date.now() - d) / 60000));
+    if(min < 2) return 'hace un momento';
+    if(min < 60) return `hace ${min} min`;
+    const h = Math.round(min / 60); if(h < 48) return `hace ${h} h`;
+    return `hace ${Math.round(h / 24)} días`;
+  }
+  function pintarCabecera(){
+    $('gymNombre').textContent = D.gym;
+    const viejo = D.fecha && (Date.now() - new Date(D.fecha.replace(' ', 'T'))) > 6 * 3600e3;
+    $('gymDatos').innerHTML = D.fecha ? `<span class="punto${viejo ? ' viejo' : ''}"></span>Datos de ${esc(cuando(D.fecha).replace(/^(Hoy|Ayer)/, x => x.toLowerCase()))} · ${esc(hace(D.fecha))}` : '';
+    document.title = D.gym + ' · Mekka';
+  }
+
+  // ------------------------------------------------------------------ vistas
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => ir(b.dataset.v));
+  function ir(v){
+    vista = v;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.v === v));
+    ({ resumen: pintarResumen, socios: pintarSocios, ingresos: pintarIngresos })[v]();
+    window.scrollTo(0, 0);
+  }
+
+  function filaSocio(s, der){
+    const est = { activa: 'Activa', pronto: 'Vence ' + fCorta(s.vence), vencida: 'Vencida', sin: 'Sin membresía', proxima: 'Empieza ' + fCorta(s.actual && s.actual.fecha_inicio) }[s.estado];
+    const sub = s.actual ? (s.estado === 'vencida' ? `${s.actual.nombre} · venció ${fCorta(s.vence)}` : s.estado === 'activa' ? `${s.actual.nombre} · hasta ${fCorta(s.vence)}` : s.actual.nombre) : (s.telefono || '');
+    return `<div class="fila" data-id="${s.id}"><div class="ini">${esc(iniciales(s.nombre))}</div>
+      <div class="nom"><b>${esc(s.nombre)}</b><small>${esc(sub)}</small></div>
+      <div class="der">${der || `<span class="est ${s.estado}">${esc(est)}</span>`}</div></div>`;
+  }
+  function enlazarFilas(cont){ cont.querySelectorAll('.fila[data-id]').forEach(f => f.onclick = () => abrirSocio(+f.dataset.id)); }
+
+  function ingresos(desde, hasta){ return D.cobros.filter(c => c.fecha >= desde && c.fecha <= hasta).reduce((t, c) => t + c.monto, 0); }
+
+  function pintarResumen(){
+    const hoy = D.hoy, mes = hoy.slice(0, 7);
+    const activos = D.socios.filter(s => s.estado === 'activa' || s.estado === 'pronto');
+    const pronto = D.socios.filter(s => s.estado === 'pronto').sort((a, b) => a.vence.localeCompare(b.vence));
+    const vencidos = D.socios.filter(s => s.recienVencida).sort((a, b) => b.vence.localeCompare(a.vence));
+    const ingMes = ingresos(mes + '-01', mes + '-31');
+    const ingHoy = ingresos(hoy, hoy);
+    const v = $('vista');
+    v.innerHTML = `
+      <div class="kpis">
+        <div class="kpi glass"><span class="etq">Activos</span><b>${activos.length}</b><small>de ${D.socios.length} socios</small></div>
+        <div class="kpi glass"><span class="etq">Hoy</span><b>${pesos(ingHoy)}</b><small>${D.accesosHoy} entradas</small></div>
+        <div class="kpi glass"><span class="etq">${esc(MESES[+mes.slice(5) - 1])}</span><b>${pesos(ingMes)}</b><small>ingresos del mes</small></div>
+        <div class="kpi glass"><span class="etq">Por vencer</span><b>${pronto.length}</b><small>en los próximos 7 días</small></div>
+      </div>
+      <div class="dos">
+        <div class="tarjeta glass"><h2>Vencen pronto</h2><p class="sub">Buen momento para recordarles su renovación.</p><div id="lPronto"></div></div>
+        <div class="tarjeta glass"><h2>No han renovado</h2><p class="sub">Su membresía terminó en los últimos 30 días.</p><div id="lVencidos"></div></div>
+      </div>
+      ${D.fecha && (Date.now() - new Date(D.fecha.replace(' ', 'T'))) > 864e5 ? `<div class="tarjeta glass"><p class="sub" style="margin:0">Estos datos son de ${esc(cuando(D.fecha))}. Las copias se suben solo mientras Mekka está abierto en el gimnasio.</p></div>` : ''}`;
+    const lista = (arr, id, der) => { const c = $(id); c.innerHTML = arr.length ? arr.slice(0, 8).map(s => filaSocio(s, der && der(s))).join('') + (arr.length > 8 ? `<div class="fila" data-ver="${id}"><div class="nom"><small>Ver los ${arr.length}</small></div></div>` : '') : '<div class="vacio">Nadie por ahora.</div>'; enlazarFilas(c);
+      const mas = c.querySelector('[data-ver]'); if(mas) mas.onclick = () => { filtro = id === 'lPronto' ? 'pronto' : 'vencida'; ir('socios'); }; };
+    lista(pronto, 'lPronto', s => `<span class="est pronto">${esc(fCorta(s.vence))}</span>`);
+    lista(vencidos, 'lVencidos', s => `<span class="est vencida">${esc(fCorta(s.vence))}</span>`);
+  }
+
+  function pintarSocios(){
+    const cuenta = f => D.socios.filter(s => pasa(s, f, '')).length;
+    const v = $('vista');
+    v.innerHTML = `
+      <label class="buscar glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Buscar por nombre o teléfono" value="${esc(textoBuscar)}" autocomplete="off"></label>
+      <div class="chips" id="filtros">
+        ${[['todos', 'Todos'], ['activa', 'Activos'], ['pronto', 'Por vencer'], ['vencida', 'Vencidos'], ['sin', 'Sin membresía']].map(([k, t]) =>
+          `<button type="button" class="chip${filtro === k ? ' activa' : ''}" data-f="${k}">${t}<small>${cuenta(k)}</small></button>`).join('')}
+      </div>
+      <div class="tarjeta glass" id="lSocios"></div>`;
+    $('q').oninput = e => { textoBuscar = e.target.value; listar(); };
+    $('filtros').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filtro = b.dataset.f; $('filtros').querySelectorAll('.chip').forEach(x => x.classList.toggle('activa', x === b)); listar(); });
+    listar();
+  }
+  const sinAcentos = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function pasa(s, f, q){
+    if(f === 'activa' && !(s.estado === 'activa' || s.estado === 'pronto')) return false;
+    if(f === 'pronto' && s.estado !== 'pronto') return false;
+    if(f === 'vencida' && s.estado !== 'vencida') return false;
+    if(f === 'sin' && s.estado !== 'sin') return false;
+    if(q){ const t = sinAcentos(q.trim()); if(t && !sinAcentos(s.nombre).includes(t) && !telLimpio(s.telefono).includes(t.replace(/\D/g, '') || '§')) return false; }
+    return true;
+  }
+  function listar(){
+    const c = $('lSocios'); if(!c) return;
+    const orden = { pronto: 0, activa: 1, proxima: 2, vencida: 3, sin: 4 };
+    const arr = D.socios.filter(s => pasa(s, filtro, textoBuscar))
+      .sort((a, b) => filtro === 'pronto' ? a.vence.localeCompare(b.vence) : filtro === 'vencida' ? b.vence.localeCompare(a.vence) : (orden[a.estado] - orden[b.estado]) || a.nombre.localeCompare(b.nombre, 'es'));
+    const max = 200;
+    c.innerHTML = arr.length ? arr.slice(0, max).map(s => filaSocio(s)).join('') + (arr.length > max ? `<div class="vacio">Mostrando ${max} de ${arr.length}. Escribe para encontrar a alguien.</div>` : '') : '<div class="vacio">No hay socios con ese filtro.</div>';
+    enlazarFilas(c);
+  }
+
+  function pintarIngresos(){
+    const meses = []; const d0 = new Date(D.hoy + 'T12:00:00');
+    for(let i = 0; i < 6; i++){ const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1); meses.push(iso(d).slice(0, 7)); }
+    if(!mesSel || !meses.includes(mesSel)) mesSel = meses[0];
+    const [a, m] = mesSel.split('-').map(Number);
+    const dias = new Date(a, m, 0).getDate();
+    const del = D.cobros.filter(c => c.fecha.startsWith(mesSel));
+    const total = del.reduce((t, c) => t + c.monto, 0);
+    const memb = del.filter(c => c.tipo === 'memb').reduce((t, c) => t + c.monto, 0);
+    const prod = total - memb;
+    const por = k => del.filter(c => c.metodo === k).reduce((t, c) => t + c.monto, 0);
+    const ef = por('efectivo'), dg = por('digital'), mp = por('mp');
+    const porDia = Array.from({ length: dias }, (_, i) => del.filter(c => +c.fecha.slice(8, 10) === i + 1).reduce((t, c) => t + c.monto, 0));
+    const max = Math.max(1, ...porDia);
+    const pct = x => total ? (x * 100 / total).toFixed(1) : 0;
+    const v = $('vista');
+    v.innerHTML = `
+      <div class="chips" id="meses">${meses.map(x => `<button type="button" class="chip${x === mesSel ? ' activa' : ''}" data-m="${x}">${MESES[+x.slice(5) - 1][0].toUpperCase() + MESES[+x.slice(5) - 1].slice(1)}${+x.slice(0, 4) !== new Date().getFullYear() ? ' ' + x.slice(0, 4) : ''}</button>`).join('')}</div>
+      <div class="kpis tres">
+        <div class="kpi glass ancho"><span class="etq">Total del mes</span><b>${pesos(total)}</b><small>${del.length} cobros</small></div>
+        <div class="kpi glass"><span class="etq">Membresías</span><b>${pesos(memb)}</b><small>${del.filter(c => c.tipo === 'memb').length} cobros</small></div>
+        <div class="kpi glass"><span class="etq">Productos</span><b>${pesos(prod)}</b><small>${del.filter(c => c.tipo === 'prod').length} ventas</small></div>
+      </div>
+      <div class="dos">
+        <div class="tarjeta glass"><h2>Por día</h2><p class="sub">Membresías y productos cobrados cada día.</p>
+          <div class="barras" role="img" aria-label="Ingresos por día">${porDia.map((x, i) => `<div class="${x ? '' : 'cero'}${mesSel + '-' + String(i + 1).padStart(2, '0') === D.hoy ? ' hoy' : ''}" style="height:${x ? Math.max(3, x * 100 / max) : 2}%" title="${i + 1}: ${pesos(x)}"></div>`).join('')}</div>
+          <div class="ejes"><span>1</span><span>${Math.ceil(dias / 2)}</span><span>${dias}</span></div></div>
+        <div class="tarjeta glass"><h2>Cómo te pagaron</h2><p class="sub">Igual que en los reportes de Mekka.</p>
+          <div class="linea" style="margin-bottom:14px"><i style="width:${pct(ef)}%"></i><i style="width:${pct(dg)}%"></i><i style="width:${pct(mp)}%"></i></div>
+          <div class="reparto">
+            <div class="r"><span>Efectivo</span><b>${pesos(ef)}</b></div>
+            <div class="r"><span>Tarjeta / transferencia</span><b>${pesos(dg)}</b></div>
+            <div class="r"><span>Mercado Pago (cobro automático)</span><b>${pesos(mp)}</b></div>
+          </div></div>
+      </div>
+      <div class="tarjeta glass" style="margin-top:14px"><h2>Últimos cobros</h2><p class="sub">${esc(MESES[m - 1])} ${a}</p><div id="lCobros"></div></div>`;
+    $('meses').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mesSel = b.dataset.m; pintarIngresos(); });
+    const NOM = { efectivo: 'Efectivo', digital: 'Tarjeta / transf.', mp: 'Mercado Pago' };
+    $('lCobros').innerHTML = del.length ? del.slice(0, 60).map(c => `<div class="fila" style="cursor:default"><div class="nom"><b>${esc(c.socio || c.concepto)}</b><small>${esc(c.socio ? c.concepto : 'Productos')} · ${esc(fCorta(c.fecha))}${c.hora ? ' ' + esc(c.hora) : ''} · ${NOM[c.metodo]}</small></div><div class="der"><b>${pesos(c.monto)}</b></div></div>`).join('')
+      + (del.length > 60 ? `<div class="vacio">Y ${del.length - 60} cobros más.</div>` : '') : '<div class="vacio">Sin cobros en este mes.</div>';
+  }
+
+  // ------------------------------------------------------------------ hoja del socio
+  function abrirSocio(id){
+    const s = D.socios.find(x => x.id === id); if(!s) return;
+    const tel = telLimpio(s.telefono);
+    const wa = tel ? 'https://wa.me/' + (tel.length === 10 ? '52' + tel : tel) : '';
+    const est = { activa: 'Activa', pronto: 'Por vencer', vencida: 'Vencida', sin: 'Sin membresía', proxima: 'Empieza pronto' }[s.estado];
+    $('hojaCuerpo').innerHTML = `
+      <div class="h-cab"><div class="ini">${esc(iniciales(s.nombre))}</div><div><h3>${esc(s.nombre)}</h3><span class="est ${s.estado}">${est}</span></div></div>
+      ${tel ? `<div class="h-acc"><a class="btn mini" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a><a class="btn sec mini" href="tel:${esc(tel)}">Llamar</a></div>` : ''}
+      ${s.actual ? `<div class="h-sec"><span class="etq">Membresía</span>
+        <div class="h-dato"><span>Plan</span><b>${esc(s.actual.nombre)}</b></div>
+        <div class="h-dato"><span>Desde</span><b>${esc(fCorta(s.actual.fecha_inicio))}</b></div>
+        <div class="h-dato"><span>${s.estado === 'vencida' ? 'Venció' : 'Vence'}</span><b>${esc(fCorta(s.actual.fecha_vencimiento))}</b></div>
+        <div class="h-dato"><span>Precio</span><b>${pesos(s.actual.precio)}</b></div></div>` : ''}
+      <div class="h-sec"><span class="etq">Contacto</span>
+        <div class="h-dato"><span>Teléfono</span><b>${esc(s.telefono || '—')}</b></div>
+        <div class="h-dato"><span>Correo</span><b>${esc(s.correo || '—')}</b></div></div>
+      <div class="h-sec"><span class="etq">Últimas entradas</span>
+        ${s.accesos.length ? s.accesos.slice(0, 6).map(a => `<div class="h-dato"><span>${esc(cuando(a))}</span><b></b></div>`).join('') : '<div class="vacio">Sin entradas registradas.</div>'}</div>
+      <div class="h-sec"><span class="etq">Historial de pagos</span>
+        ${s.membs.length ? s.membs.slice().reverse().slice(0, 8).map(m => `<div class="h-dato"><span>${esc(m.nombre)} · ${esc(fCorta(m.fecha_pago || m.fecha_inicio))}</span><b>${pesos(m.precio)}</b></div>`).join('') : '<div class="vacio">Sin pagos.</div>'}</div>
+      <div style="margin-top:20px"><button class="btn sec" style="width:100%" type="button" id="hojaCerrar">Cerrar</button></div>`;
+    $('hoja').classList.remove('oculto');
+    $('hojaCerrar').onclick = cerrarHoja;
+  }
+  function cerrarHoja(){ $('hoja').classList.add('oculto'); }
+  $('hoja').onclick = e => { if(e.target === $('hoja')) cerrarHoja(); };
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') cerrarHoja(); });
+})();
+</script>
+</body>
+</html>
