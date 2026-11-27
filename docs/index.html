@@ -83,8 +83,11 @@
   .punto.viejo{ background:var(--warn); }
 
   .tabs{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(14px + var(--seguro-abajo)); z-index:20; display:flex; gap:4px; padding:6px; border-radius:999px; }
-  .tab{ min-height:46px; padding:0 18px; border-radius:999px; border:0; background:transparent; color:var(--t3); font-weight:600; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:7px; }
-  .tab svg{ width:18px; height:18px; }
+  .tab{ min-height:46px; padding:0 14px; border-radius:999px; border:0; background:transparent; color:var(--t3); font-weight:600; font-size:13.5px; cursor:pointer; display:flex; align-items:center; gap:7px; }
+  .tab svg{ width:18px; height:18px; flex-shrink:0; }
+  @media (max-width:430px){ .tabs{ gap:2px; padding:5px; } .tab{ flex-direction:column; justify-content:center; gap:2px; min-height:50px; padding:0 11px; font-size:11px; } }
+  .stock{ font-weight:700; color:var(--t1); } .stock.bajo{ color:var(--warn); } .stock.cero{ color:var(--err); }
+  .aviso-vista{ font-size:12.5px; color:var(--t4); margin:-6px 0 14px; }
   .tab.activa{ background:#F5F5F5; color:#0A0A0A; }
 
   .kpis{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
@@ -208,6 +211,7 @@
     <button class="tab activa" data-v="resumen" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Resumen</button>
     <button class="tab" data-v="socios" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8"/><path d="M22 21a7 7 0 0 0-4-6.3"/></svg>Socios</button>
     <button class="tab" data-v="ingresos" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Ingresos</button>
+    <button class="tab" data-v="inventario" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg>Inventario</button>
   </nav>
 </main>
 
@@ -304,6 +308,7 @@
     }catch(err){ error(err.message); }
   }
 
+  const tam = n => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
   function fechaDe(a){ const f = a.appProperties && a.appProperties.fecha; return f ? f.replace('T', ' ') : (a.createdTime || '').replace('T', ' ').slice(0, 19); }
 
   async function abrirArchivo(a){
@@ -325,7 +330,7 @@
 
   $('btnCopias').onclick = () => {
     if(!archivosGym.length){ $('archivo').click(); return; }
-    elegirLista('Copias anteriores', 'Historial', archivosGym.map(a => ({ t: cuando(fechaDe(a)), s: (a.size ? (a.size / 1048576).toFixed(1) + ' MB' : '') + (a === archivoActual ? ' · la que estás viendo' : ''), fn: () => abrirArchivo(a) })), () => mostrar('app'));
+    elegirLista('Copias anteriores', 'Historial', archivosGym.map(a => ({ t: cuando(fechaDe(a)), s: ((a.appProperties && a.appProperties.tipo) === 'vista' ? 'Vista rápida' : 'Respaldo completo') + (a.size ? ' · ' + tam(+a.size) : '') + (a === archivoActual ? ' · la que estás viendo' : ''), fn: () => abrirArchivo(a) })), () => mostrar('app'));
   };
   $('btnRecargar').onclick = () => { if(token) buscarCopias(); else $('archivo').click(); };
   $('btnSalir').onclick = () => {
@@ -383,11 +388,22 @@
       });
     }
     cobros.sort((a, b) => (b.fecha + b.hora).localeCompare(a.fecha + a.hora));
+    // [drive-v3] inventario y movimientos de productos
+    const productos = db.tiene('productos') ? db.filas('productos').map(p => ({ id: p.id, nombre: p.nombre || 'Producto', precio: +p.precio || 0, stock: +p.stock || 0 })) : [];
+    const vendidos = {}, comprados = {};
+    if(db.tiene('ventas_producto') && db.tiene('venta_producto_items')){
+      const hoyVentas = new Set(db.filas('ventas_producto').filter(v => (v.fecha || '').startsWith(hoy)).map(v => v.id));
+      db.filas('venta_producto_items').forEach(i => { if(hoyVentas.has(i.venta_id)) vendidos[i.nombre] = (vendidos[i.nombre] || 0) + (+i.cantidad || 0); });
+    }
+    if(db.tiene('compras_producto')) db.filas('compras_producto').forEach(c => { if((c.fecha || '').startsWith(hoy)) comprados[c.nombre] = (comprados[c.nombre] || 0) + (+c.cantidad || 0); });
     const accesosHoy = accesos.filter(a => a.concedido && (a.fecha_hora || '').startsWith(hoy));
     return { cfg, gym: (cfg.nombre || '').trim() || 'Mi gimnasio', fecha: r.manifest.fecha || '', sinFotos: !!r.manifest.sin_fotos,
+      vista: r.manifest.tipo === 'vista', productos, vendidos, comprados,
       hoy, socios: [...socios.values()], cobros, accesosHoy: accesosHoy.length,
       unicosHoy: new Set(accesosHoy.map(a => a.socio_id)).size };
   }
+  const NOMBRE_METODO = { efectivo: 'Efectivo', digital: 'Tarjeta / transferencia', mp: 'Mercado Pago (automático)' };
+  const ultimoPago = s => s.membs.map(m => m.fecha_pago || '').filter(Boolean).sort().pop() || '';
   function metodo(m, usuario){
     if(m === 'digital' && usuario === 'Cobro automático') return 'mp';
     return m === 'digital' ? 'digital' : 'efectivo';
@@ -412,7 +428,7 @@
   function pintarCabecera(){
     $('gymNombre').textContent = D.gym;
     const viejo = D.fecha && (Date.now() - new Date(D.fecha.replace(' ', 'T'))) > 6 * 3600e3;
-    $('gymDatos').innerHTML = D.fecha ? `<span class="punto${viejo ? ' viejo' : ''}"></span>Datos de ${esc(cuando(D.fecha).replace(/^(Hoy|Ayer)/, x => x.toLowerCase()))} · ${esc(hace(D.fecha))}` : '';
+    $('gymDatos').innerHTML = D.fecha ? `<span class="punto${viejo ? ' viejo' : ''}"></span>${D.vista ? 'Vista rápida' : 'Respaldo completo'} de ${esc(cuando(D.fecha).replace(/^(Hoy|Ayer)/, x => x.toLowerCase()))} · ${esc(hace(D.fecha))}` : '';
     document.title = D.gym + ' · Mekka';
   }
 
@@ -421,7 +437,7 @@
   function ir(v){
     vista = v;
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.v === v));
-    ({ resumen: pintarResumen, socios: pintarSocios, ingresos: pintarIngresos })[v]();
+    ({ resumen: pintarResumen, socios: pintarSocios, ingresos: pintarIngresos, inventario: pintarInventario })[v]();
     window.scrollTo(0, 0);
   }
 
@@ -498,7 +514,7 @@
 
   function pintarIngresos(){
     const meses = []; const d0 = new Date(D.hoy + 'T12:00:00');
-    for(let i = 0; i < 6; i++){ const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1); meses.push(iso(d).slice(0, 7)); }
+    for(let i = 0; i < (D.vista ? 1 : 6); i++){ const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1); meses.push(iso(d).slice(0, 7)); }
     if(!mesSel || !meses.includes(mesSel)) mesSel = meses[0];
     const [a, m] = mesSel.split('-').map(Number);
     const dias = new Date(a, m, 0).getDate();
@@ -533,9 +549,35 @@
       </div>
       <div class="tarjeta glass" style="margin-top:14px"><h2>Últimos cobros</h2><p class="sub">${esc(MESES[m - 1])} ${a}</p><div id="lCobros"></div></div>`;
     $('meses').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mesSel = b.dataset.m; pintarIngresos(); });
+    if(D.vista) $('meses').insertAdjacentHTML('afterend', '<div class="aviso-vista">La vista rápida trae solo el mes en curso. Los meses anteriores están en el respaldo completo (botón del reloj arriba).</div>');
     const NOM = { efectivo: 'Efectivo', digital: 'Tarjeta / transf.', mp: 'Mercado Pago' };
     $('lCobros').innerHTML = del.length ? del.slice(0, 60).map(c => `<div class="fila" style="cursor:default"><div class="nom"><b>${esc(c.socio || c.concepto)}</b><small>${esc(c.socio ? c.concepto : 'Productos')} · ${esc(fCorta(c.fecha))}${c.hora ? ' ' + esc(c.hora) : ''} · ${NOM[c.metodo]}</small></div><div class="der"><b>${pesos(c.monto)}</b></div></div>`).join('')
       + (del.length > 60 ? `<div class="vacio">Y ${del.length - 60} cobros más.</div>` : '') : '<div class="vacio">Sin cobros en este mes.</div>';
+  }
+
+  // ------------------------------------------------------------------ inventario  [drive-v3]
+  function pintarInventario(){
+    const v = $('vista');
+    if(!D.productos.length){ v.innerHTML = '<div class="tarjeta glass"><h2>Inventario</h2><p class="sub" style="margin:0">Este gimnasio no tiene productos registrados en Mekka.</p></div>'; return; }
+    const orden = D.productos.slice().sort((a, b) => (a.stock - b.stock) || a.nombre.localeCompare(b.nombre, 'es'));
+    const bajos = orden.filter(p => p.stock <= 5).length;
+    const piezas = orden.reduce((t, p) => t + Math.max(0, p.stock), 0);
+    const valor = orden.reduce((t, p) => t + Math.max(0, p.stock) * p.precio, 0);
+    const vend = Object.entries(D.vendidos), comp = Object.entries(D.comprados);
+    const lista = arr => arr.length ? arr.sort((a, b) => b[1] - a[1]).map(([n, c]) => `<div class="fila" style="cursor:default"><div class="nom"><b>${esc(n)}</b></div><div class="der"><b>${c}</b></div></div>`).join('') : '<div class="vacio">Nada por ahora.</div>';
+    v.innerHTML = `
+      <div class="kpis tres">
+        <div class="kpi glass"><span class="etq">Productos</span><b>${orden.length}</b><small>${piezas} piezas en total</small></div>
+        <div class="kpi glass"><span class="etq">Por acabarse</span><b>${bajos}</b><small>con 5 piezas o menos</small></div>
+        <div class="kpi glass ancho"><span class="etq">Valor a precio de venta</span><b>${pesos(valor)}</b><small>lo que hay en existencia</small></div>
+      </div>
+      <div class="tarjeta glass"><h2>Existencias</h2><p class="sub">Primero los que se están acabando.</p>
+        ${orden.map(p => `<div class="fila" style="cursor:default"><div class="nom"><b>${esc(p.nombre)}</b><small>${pesos(p.precio)}</small></div><div class="der"><span class="stock${p.stock <= 0 ? ' cero' : p.stock <= 5 ? ' bajo' : ''}">${p.stock}</span><small style="display:block;color:var(--t4)">piezas</small></div></div>`).join('')}
+      </div>
+      <div class="dos">
+        <div class="tarjeta glass"><h2>Vendido hoy</h2><p class="sub">Piezas por producto.</p>${lista(vend)}</div>
+        <div class="tarjeta glass"><h2>Comprado hoy</h2><p class="sub">Lo que entró al inventario.</p>${lista(comp)}</div>
+      </div>`;
   }
 
   // ------------------------------------------------------------------ hoja del socio
@@ -551,14 +593,16 @@
         <div class="h-dato"><span>Plan</span><b>${esc(s.actual.nombre)}</b></div>
         <div class="h-dato"><span>Desde</span><b>${esc(fCorta(s.actual.fecha_inicio))}</b></div>
         <div class="h-dato"><span>${s.estado === 'vencida' ? 'Venció' : 'Vence'}</span><b>${esc(fCorta(s.actual.fecha_vencimiento))}</b></div>
-        <div class="h-dato"><span>Precio</span><b>${pesos(s.actual.precio)}</b></div></div>` : ''}
+        <div class="h-dato"><span>Precio</span><b>${pesos(s.actual.precio)}</b></div>
+        <div class="h-dato"><span>Paga con</span><b>${esc(NOMBRE_METODO[metodo(s.actual.metodo_pago, s.actual.usuario)])}</b></div>
+        <div class="h-dato"><span>Último pago</span><b>${esc(fCorta(ultimoPago(s)) || '—')}</b></div></div>` : ''}
       <div class="h-sec"><span class="etq">Contacto</span>
         <div class="h-dato"><span>Teléfono</span><b>${esc(s.telefono || '—')}</b></div>
         <div class="h-dato"><span>Correo</span><b>${esc(s.correo || '—')}</b></div></div>
       <div class="h-sec"><span class="etq">Últimas entradas</span>
         ${s.accesos.length ? s.accesos.slice(0, 6).map(a => `<div class="h-dato"><span>${esc(cuando(a))}</span><b></b></div>`).join('') : '<div class="vacio">Sin entradas registradas.</div>'}</div>
-      <div class="h-sec"><span class="etq">Historial de pagos</span>
-        ${s.membs.length ? s.membs.slice().reverse().slice(0, 8).map(m => `<div class="h-dato"><span>${esc(m.nombre)} · ${esc(fCorta(m.fecha_pago || m.fecha_inicio))}</span><b>${pesos(m.precio)}</b></div>`).join('') : '<div class="vacio">Sin pagos.</div>'}</div>
+      <div class="h-sec"><span class="etq">${D.vista ? 'Pagos recientes' : 'Historial de pagos'}</span>
+        ${s.membs.length ? s.membs.slice().reverse().slice(0, 8).map(m => `<div class="h-dato"><span>${esc(m.nombre)} · ${esc(fCorta(m.fecha_pago || m.fecha_inicio))} · ${esc(NOMBRE_METODO[metodo(m.metodo_pago, m.usuario)])}</span><b>${pesos(m.precio)}</b></div>`).join('') : '<div class="vacio">Sin pagos.</div>'}</div>
       <div style="margin-top:20px"><button class="btn sec" style="width:100%" type="button" id="hojaCerrar">Cerrar</button></div>`;
     $('hoja').classList.remove('oculto');
     $('hojaCerrar').onclick = cerrarHoja;
